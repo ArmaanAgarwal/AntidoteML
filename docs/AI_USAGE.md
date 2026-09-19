@@ -21,3 +21,4 @@ another person's section.
 - Claude Code wrote the repo skeleton, stubs, `config.py`, `worker.py`, `InProcessPool`, `configs/smoke.yaml` and the first tests from step 1 of the plan. I reviewed every file.
 - Step 2: Claude Code wrote `tests/test_config_validate.py` and the full `config.py` validation (id ranges, known execution, aggregator, dataset, attack mode and fault kind values) from my description. I chose what to validate and checked each message.
 - Step 3 and 4: Claude Code wrote `tests/test_worker_round.py` and `tests/test_pool_inprocess.py` first, then the worker update coercion and the `truncate_splits` cap for `train_images` in `InProcessPool`. I picked the seed derivation and reviewed the tests.
+- Step 5: Claude Code wrote `tests/test_config_scenarios.py` and generated the six scenario configs from it. I chose the worker ids, the attack start rounds and the off and on pairing rule.

@@ -89,7 +89,7 @@ def validate(cfg):
     _check(cfg.target_class >= 0, "target_class must be zero or more")
 
     # yaml turns bare on and off into booleans, but "off" in quotes stays a
-    # truthy string, which would silently run the defence in an off scenario.
+    # truthy string, which would silently run the defense in an off scenario.
     _check(isinstance(cfg.defense, bool), "defense must be a boolean, write on or off unquoted")
 
     _check(
