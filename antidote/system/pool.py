@@ -192,10 +192,14 @@ def worker_process(conn, cfg, worker_id, x_np, y_np, spec, faults):
 class MultiprocessPool(WorkerPool):
     """One process per worker, one pipe per worker, no restarts.
 
-    A round is: send (round, global weights) to everyone active, then collect
-    replies against a single shared deadline. Slow workers are not given a
-    fresh timeout each, or ten slow workers would hold the round for ten
-    timeouts.
+    A round is: hand the new weights to every active worker, then collect
+    replies against a single shared deadline. Slow workers do not each get a
+    fresh timeout, or ten slow workers would hold the round for ten timeouts.
+
+    The pool only hands work to a worker that has come back from its last job.
+    An update is megabytes and a pipe buffer is tens of kilobytes, so writing to
+    a worker that is not reading would block the coordinator itself, which is
+    the one thing a timeout is supposed to prevent.
     """
 
     def __init__(self, cfg, splits, specs, startup_timeout_s=STARTUP_TIMEOUT_S):
@@ -204,10 +208,11 @@ class MultiprocessPool(WorkerPool):
         self._procs = {}
         self._conns = {}
         self._owner = {}  # connection -> worker id
+        self._outstanding = {}  # worker id -> the round it still owes us, or None
         self._failed = set()
         self._status = {}
         self._closed = False
-        self.discarded = []  # (worker id, round) of every reply that arrived late
+        self.discarded = []  # (worker id, round) of every reply that arrived too late
         try:
             self._start(startup_timeout_s)
         except Exception:
@@ -246,13 +251,14 @@ class MultiprocessPool(WorkerPool):
             self._procs[wid] = proc
             self._conns[wid] = parent_conn
             self._owner[parent_conn] = wid
+            self._outstanding[wid] = None
         self._wait_for_ready(startup_timeout_s)
 
     def _wait_for_ready(self, startup_timeout_s):
         """Nobody trains until every process has imported torch and built its
         model. Without this handshake, startup is charged to round 1 and every
         worker looks like it timed out."""
-        waiting = {conn for conn in self._conns.values()}
+        waiting = set(self._conns.values())
         deadline = time.monotonic() + startup_timeout_s
         while waiting:
             remaining = deadline - time.monotonic()
@@ -260,25 +266,53 @@ class MultiprocessPool(WorkerPool):
                 break
             for conn in wait(list(waiting), timeout=remaining):
                 wid = self._owner[conn]
-                try:
-                    msg = conn.recv()
-                except (EOFError, OSError):
+                msg = self._read(conn, wid)
+                waiting.discard(conn)
+                if msg is None or msg.get("kind") != READY:
                     self._mark_failed(wid)
-                    waiting.discard(conn)
-                    continue
-                if msg.get("kind") == READY:
-                    waiting.discard(conn)
         for conn in waiting:
             # Never said hello. Treat it as a machine that did not come up.
             self._mark_failed(self._owner[conn])
 
+    def _read(self, conn, wid):
+        """One message, or None if the pipe broke and the worker is gone."""
+        try:
+            return conn.recv()
+        except (EOFError, OSError):
+            self._mark_failed(wid)
+            return None
+
     def _mark_failed(self, wid):
         """Failed is forever. A machine that died stays dead for this run."""
         self._failed.add(wid)
+        self._outstanding[wid] = None
+
+    def _drain_old_replies(self):
+        """Empty the pipes before a new round goes out.
+
+        Anything sitting there now was sent for a round we have already closed,
+        so it is stale by definition. Reading it also frees a worker that is
+        blocked writing into a pipe nobody is emptying.
+        """
+        waiting = {c for w, c in self._conns.items() if w not in self._failed}
+        while waiting:
+            ready = wait(list(waiting), timeout=0)
+            if not ready:
+                return
+            for conn in ready:
+                wid = self._owner[conn]
+                msg = self._read(conn, wid)
+                if msg is None:
+                    waiting.discard(conn)
+                    continue
+                self.discarded.append((wid, msg.get("round")))
+                if msg.get("round") == self._outstanding.get(wid):
+                    self._outstanding[wid] = None
 
     def run_round(self, global_flat, round, active_ids):
         results = {}
         self._status = {}
+        self._drain_old_replies()
         flat_np = to_numpy(global_flat)
 
         pending = set()
@@ -287,13 +321,22 @@ class MultiprocessPool(WorkerPool):
                 results[wid] = None
                 self._status[wid] = "failed"
                 continue
+            if self._outstanding.get(wid) is not None:
+                # Still chewing on an earlier round. Pushing more at it would
+                # block this loop on a full pipe, and its answer would be stale
+                # anyway, so it simply misses this round.
+                results[wid] = None
+                self._status[wid] = "timeout"
+                continue
             try:
                 self._conns[wid].send({"kind": TASK, "round": round, "flat": flat_np})
-                pending.add(wid)
             except (BrokenPipeError, OSError, ValueError):
                 self._mark_failed(wid)
                 results[wid] = None
                 self._status[wid] = "failed"
+                continue
+            self._outstanding[wid] = round
+            pending.add(wid)
 
         # One deadline for the whole round, started once every task is out.
         deadline = time.monotonic() + self.cfg.round_timeout_s
@@ -306,23 +349,23 @@ class MultiprocessPool(WorkerPool):
                 break
             for conn in ready:
                 wid = self._owner[conn]
-                try:
-                    msg = conn.recv()
-                except (EOFError, OSError):
-                    self._mark_failed(wid)
+                msg = self._read(conn, wid)
+                if msg is None:
                     results[wid] = None
                     self._status[wid] = "failed"
                     pending.discard(wid)
                     continue
                 if msg.get("round") != round:
-                    # A reply from a round we already closed. Using it would
-                    # add an update computed against weights that are now two
-                    # rounds old, so it goes in the bin and we keep waiting.
+                    # An answer to a round we already closed. Using it would
+                    # fold in an update computed against weights that are now
+                    # rounds out of date, so it goes in the bin and we keep
+                    # waiting for the answer we actually asked for.
                     self.discarded.append((wid, msg.get("round")))
                     continue
                 delta = msg.get("delta")
                 results[wid] = None if delta is None else from_numpy(delta)
                 self._status[wid] = "failed" if delta is None else "ok"
+                self._outstanding[wid] = None
                 pending.discard(wid)
 
         for wid in pending:
@@ -333,25 +376,39 @@ class MultiprocessPool(WorkerPool):
     def status(self):
         return dict(self._status)
 
+    def _join_all(self, timeout):
+        """Join every process against one shared budget, not one budget each."""
+        deadline = time.monotonic() + timeout
+        for proc in self._procs.values():
+            proc.join(timeout=max(0.0, deadline - time.monotonic()))
+
     def close(self):
         """Safe to call twice, and leaves no process behind either time."""
         if self._closed:
             return
         self._closed = True
-        for conn in self._conns.values():
+        for wid, conn in self._conns.items():
+            if wid in self._failed or self._outstanding.get(wid) is not None:
+                # Busy or gone, so it is not reading. Writing at it could block
+                # close itself, and there is nothing a goodbye would add: the
+                # pipe going away below stops it just as well.
+                continue
             try:
                 conn.send({"kind": SHUTDOWN})
             except Exception:
                 pass
+        # Dropping the pipe is the backstop: a worker asleep or blocked writing
+        # gets end of file or a broken pipe and falls out of its loop. Closing
+        # now does not lose the shutdown message, because bytes already in the
+        # pipe stay readable after the writing end goes away.
         for conn in self._conns.values():
             try:
                 conn.close()
             except Exception:
                 pass
+        self._join_all(CLOSE_TIMEOUT_S)
         for proc in self._procs.values():
-            proc.join(timeout=CLOSE_TIMEOUT_S)
             if proc.is_alive():
-                # Asleep, wedged, or ignoring us. Stop being polite.
                 proc.terminate()
                 proc.join(timeout=CLOSE_TIMEOUT_S)
             if proc.is_alive():
