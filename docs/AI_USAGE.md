@@ -5,6 +5,9 @@ another person's section.
 
 ## Person 1: ML
 
+- Claude Code wrote `antidote/ml/model.py` and its tests from step 1 of the plan. I checked the 629,291 parameter count and that the model has no buffers.
+- Claude Code wrote `antidote/ml/flat.py` and its tests from step 2 of the plan, replacing Person 4's stub. I checked the round trip is exact and that a wrong length raises.
+
 ## Person 2: Security
 
 ## Person 3: Systems, coordinator
