@@ -1,0 +1,17 @@
+name: smoke
+seed: 42
+dataset: gtsrb
+num_workers: 5
+rounds: 3
+local_epochs: 1
+batch_size: 64
+lr: 0.01
+momentum: 0.9
+target_class: 5
+train_images: 1000
+defense: off
+aggregator: mean
+trim_frac: 0.2
+detector: {warmup: 3, threshold: 3.5, strikes: 3, window: 5, hard_norm_ratio: 5.0}
+execution: inprocess
+round_timeout_s: 60
