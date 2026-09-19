@@ -7,6 +7,10 @@ another person's section.
 
 ## Person 2: Security
 
+- Cursor helped write and test the trigger, poisoning, and update-tampering modules; I reviewed the deterministic seeding, caching, and tensor behavior.
+- Cursor helped create and validate the six clean, backdoor, and faulty-worker scenario configs; I reviewed every scenario value.
+- Cursor helped implement and test the one/two-run JSONL plotting tool; I reviewed its metric, attacker, attack-start, and ejection rendering.
+
 ## Person 3: Systems, coordinator
 
 ## Person 4: Systems, runtime
