@@ -176,6 +176,7 @@ seed: 42
 dataset: gtsrb              # gtsrb | mnist
 num_workers: 10
 rounds: 40
+train_images: null          # null = use every image. A number truncates each worker split to train_images // num_workers.
 local_epochs: 1
 batch_size: 64
 lr: 0.01
