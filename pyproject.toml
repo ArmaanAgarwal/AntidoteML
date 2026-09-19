@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "antidoteml"
+version = "0.1.0"
+description = "A security layer for distributed ML training"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torchvision",
+    "pyyaml",
+    "numpy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["antidote*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
