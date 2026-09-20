@@ -182,3 +182,40 @@ def test_training_on_mps_leaves_a_usable_cpu_update():
     assert delta.device.type == "cpu"
     assert torch.isfinite(delta).all()
     assert delta.abs().sum() > 0
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="no mps")
+def test_data_already_on_the_device_gives_the_same_answer():
+    # local_train batches differently depending on where the data lives, so
+    # the two paths have to agree exactly or a worker's update would depend on
+    # how its pool happened to hand over the split.
+    x, y = tiny_task()
+
+    from_cpu = fresh_model()
+    local_train(from_cpu, x, y, 2, 16, 0.01, 0.9, 7, "mps")
+
+    already_there = fresh_model()
+    local_train(already_there, x.to("mps"), y.to("mps"), 2, 16, 0.01, 0.9, 7, "mps")
+
+    assert torch.equal(get_flat(from_cpu), get_flat(already_there))
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="no mps")
+def test_a_ragged_last_batch_works_on_the_device_too():
+    model = fresh_model()
+    before = get_flat(model)
+    x, y = tiny_task(n=10)
+    local_train(model, x, y, 1, 4, 0.01, 0.9, 7, "mps")
+    delta = get_flat(model) - before
+    assert torch.isfinite(delta).all()
+    assert delta.abs().sum() > 0
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="no mps")
+def test_device_training_does_not_modify_the_caller_data():
+    x, y = tiny_task()
+    x_dev, y_dev = x.to("mps"), y.to("mps")
+    x_before, y_before = x_dev.clone(), y_dev.clone()
+    local_train(fresh_model(), x_dev, y_dev, 2, 16, 0.01, 0.9, 7, "mps")
+    assert torch.equal(x_dev, x_before)
+    assert torch.equal(y_dev, y_before)
