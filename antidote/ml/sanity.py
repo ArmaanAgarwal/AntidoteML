@@ -37,6 +37,21 @@ DEFAULT_WORKERS = 10
 DEFAULT_ROUNDS = 10
 
 
+def sync(device):
+    """Wait for queued device work to finish before stopping a timer.
+
+    mps and cuda run asynchronously: the python call returns long before the
+    GPU is done. Timing without this reports a number far below the truth,
+    which is worse than useless when somebody is sizing a worker timeout from
+    it.
+    """
+    kind = str(device)
+    if kind.startswith("mps") and torch.backends.mps.is_available():
+        torch.mps.synchronize()
+    elif kind.startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
 def average(deltas):
     """The plain mean of a list of flat updates.
 
@@ -103,6 +118,7 @@ def part1(x, y, x_test, y_test, classes, args, device):
         seed=args.seed,
         device=device,
     )
+    sync(device)
     seconds = time.time() - started
 
     clean_acc, _ = evaluate(get_flat(model), x_test, y_test, args.target_class, device, max_eval=None)
@@ -147,6 +163,7 @@ def part2(splits, x_test, y_test, classes, args, device):
                 seed=args.seed + 1000 * worker_id + rnd,
                 device=device,
             )
+            sync(device)
             worker_seconds.append(time.time() - worker_started)
             deltas.append(get_flat(model) - global_flat)
 

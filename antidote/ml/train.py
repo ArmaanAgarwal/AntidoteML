@@ -41,13 +41,33 @@ def local_train(model, x, y, epochs, batch_size, lr, momentum, seed, device):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     loss_fn = nn.CrossEntropyLoss()
 
+    # On an accelerator, forty odd small gather operations cost noticeably more
+    # than one big one, so there the epoch is shuffled in a single step and the
+    # batches are plain slices of it. On cpu that trade is not worth it: it
+    # measured no faster and it holds a second copy of the split in memory,
+    # which matters when ten worker processes each hold their own. Either way
+    # the batches are identical, so the two paths train to the same weights.
+    shuffle_whole_epoch = x.device.type != "cpu"
+
     generator = torch.Generator().manual_seed(int(seed))
     for _ in range(epochs):
         order = torch.randperm(n, generator=generator)
-        for start in range(0, n, batch_size):
-            batch = order[start : start + batch_size].to(x.device)
+        if shuffle_whole_epoch:
+            order = order.to(x.device)
+            epoch_x, epoch_y = x[order], y[order]
+            batches = (
+                (epoch_x[start : start + batch_size], epoch_y[start : start + batch_size])
+                for start in range(0, n, batch_size)
+            )
+        else:
+            batches = (
+                (x[order[start : start + batch_size]], y[order[start : start + batch_size]])
+                for start in range(0, n, batch_size)
+            )
+
+        for batch_x, batch_y in batches:
             optimizer.zero_grad(set_to_none=True)
-            loss = loss_fn(model(x[batch]), y[batch])
+            loss = loss_fn(model(batch_x), batch_y)
             loss.backward()
             optimizer.step()
 
