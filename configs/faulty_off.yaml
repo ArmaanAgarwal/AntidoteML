@@ -1,3 +1,4 @@
+# Worker 2 has broken hardware and sends noise. Nothing stops it.
 name: faulty_off
 seed: 42
 dataset: gtsrb
@@ -8,10 +9,11 @@ batch_size: 64
 lr: 0.01
 momentum: 0.9
 target_class: 5
-defense: off
+defense: off               # plain mean, no detector. The control run.
 aggregator: mean
 trim_frac: 0.2
 detector: {warmup: 3, threshold: 3.5, strikes: 3, window: 5, hard_norm_ratio: 5.0}
 execution: inprocess
+round_timeout_s: 60
 attackers:
   2: {mode: noise, start_round: 15}
