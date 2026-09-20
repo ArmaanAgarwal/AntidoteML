@@ -1,0 +1,17 @@
+name: backdoor_on
+seed: 42
+dataset: gtsrb
+num_workers: 10
+rounds: 40
+local_epochs: 1
+batch_size: 64
+lr: 0.01
+momentum: 0.9
+target_class: 5
+defense: on
+aggregator: trimmed_mean
+trim_frac: 0.2
+detector: {warmup: 3, threshold: 3.5, strikes: 3, window: 5, hard_norm_ratio: 5.0}
+execution: inprocess
+attackers:
+  6: {mode: scale, start_round: 10, poison_frac: 0.5, scale: 10}
