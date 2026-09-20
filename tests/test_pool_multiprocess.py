@@ -12,22 +12,27 @@ import pytest
 import torch
 
 from antidote.ml import get_flat, make_model
-from antidote.ml.data import CLASS_NAMES
 from antidote.system.config import Config, validate
 from antidote.system.pool import InProcessPool, MultiprocessPool, make_pool
 
 NUM_WORKERS = 3
 IMAGES = 8
+NUM_CLASSES = 43  # frozen by the contract, so the tests never read ml/data.py
 TIMEOUT = 1.0
 MARGIN = 2.0  # room for process scheduling on a loaded laptop
 
 
-def make_splits(num_workers=NUM_WORKERS, n=IMAGES):
-    g = torch.Generator().manual_seed(0)
+def fake_splits(num_workers=NUM_WORKERS, images=IMAGES, seed=0):
+    """Synthetic worker splits, the same shape as the real ones.
+
+    No test of mine calls load_data. A clean checkout has no GTSRB download
+    sitting in front of it, and the suite runs with the network unplugged.
+    """
+    g = torch.Generator().manual_seed(seed)
     return [
         (
-            torch.randn(n, 3, 32, 32, generator=g),
-            torch.randint(0, len(CLASS_NAMES), (n,), generator=g),
+            torch.randn(images, 3, 32, 32, generator=g),
+            torch.randint(0, NUM_CLASSES, (images,), generator=g, dtype=torch.int64),
         )
         for _ in range(num_workers)
     ]
@@ -72,7 +77,7 @@ def fails_if_slower_than(seconds):
 
 @pytest.fixture
 def global_flat():
-    return get_flat(make_model(len(CLASS_NAMES)))
+    return get_flat(make_model(NUM_CLASSES))
 
 
 @pytest.fixture
@@ -81,7 +86,7 @@ def pool_factory():
     made = []
 
     def build(cfg=None, splits=None, specs=None, **kwargs):
-        pool = MultiprocessPool(cfg or make_cfg(), splits or make_splits(), specs or {}, **kwargs)
+        pool = MultiprocessPool(cfg or make_cfg(), splits or fake_splits(), specs or {}, **kwargs)
         made.append(pool)
         return pool
 
@@ -91,7 +96,7 @@ def pool_factory():
 
 
 def test_make_pool_picks_the_multiprocess_pool():
-    pool = make_pool(make_cfg(), make_splits(), {})
+    pool = make_pool(make_cfg(), fake_splits(), {})
     try:
         assert isinstance(pool, MultiprocessPool)
     finally:
@@ -113,7 +118,7 @@ def test_a_round_comes_back_with_one_update_per_active_worker(pool_factory, glob
 
 def test_the_two_pools_agree_on_the_same_seed(pool_factory, global_flat):
     cfg = make_cfg()
-    here = InProcessPool(cfg, make_splits(), {})
+    here = InProcessPool(cfg, fake_splits(), {})
     there = pool_factory(cfg)
     try:
         mine = here.run_round(global_flat, 1, [0, 1, 2])
@@ -220,7 +225,7 @@ def test_a_worker_that_never_says_hello_counts_as_failed(pool_factory, global_fl
 
 def test_close_leaves_no_live_child_process(global_flat):
     cfg = make_cfg(faults=[fault(1, 1, "sleep")])
-    pool = MultiprocessPool(cfg, make_splits(), {})
+    pool = MultiprocessPool(cfg, fake_splits(), {})
     pool.run_round(global_flat, 1, [0, 1, 2])
     procs = list(pool._procs.values())
     assert procs and any(p.is_alive() for p in procs)
@@ -230,7 +235,7 @@ def test_close_leaves_no_live_child_process(global_flat):
 
 
 def test_close_is_safe_to_call_twice(global_flat):
-    pool = MultiprocessPool(make_cfg(), make_splits(), {})
+    pool = MultiprocessPool(make_cfg(), fake_splits(), {})
     pool.run_round(global_flat, 1, [0])
     pool.close()
     pool.close()

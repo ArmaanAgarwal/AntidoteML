@@ -32,7 +32,7 @@ Tests live in `tests/` and are named after what you own:
 | 1 | `test_ml_*.py` |
 | 2 | `test_attacks_*.py`, `test_defense_*.py` |
 | 3 | `test_coordinator_*.py`, `test_aggregate_*.py`, `test_runlog_*.py` |
-| 4 | `test_config_*.py`, `test_worker_*.py`, `test_pool_*.py` |
+| 4 | `test_config_*.py`, `test_worker_*.py`, `test_pool_*.py`, `test_plot_*.py` |
 
 ### The three rules
 

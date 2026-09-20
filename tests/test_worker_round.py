@@ -9,10 +9,11 @@ import pytest
 import torch
 
 from antidote.ml import get_flat, make_model
-from antidote.ml.data import CLASS_NAMES
 from antidote.system import worker as worker_mod
 from antidote.system.config import Config
 from antidote.system.worker import run_worker_round, worker_seed
+
+NUM_CLASSES = 43  # frozen by the contract, so the tests never read ml/data.py
 
 
 @pytest.fixture
@@ -22,14 +23,14 @@ def cfg():
 
 @pytest.fixture
 def model():
-    return make_model(len(CLASS_NAMES))
+    return make_model(NUM_CLASSES)
 
 
 @pytest.fixture
 def batch():
     g = torch.Generator().manual_seed(0)
     x = torch.randn(8, 3, 32, 32, generator=g)
-    y = torch.randint(0, len(CLASS_NAMES), (8,), generator=g)
+    y = torch.randint(0, NUM_CLASSES, (8,), generator=g)
     return x, y
 
 
