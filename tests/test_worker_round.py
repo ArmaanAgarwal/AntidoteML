@@ -131,6 +131,10 @@ def test_non_finite_values_from_the_attacker_are_not_cleaned_up(monkeypatch, cfg
 
 def test_a_worker_leaves_the_model_holding_its_trained_weights(cfg, model, batch):
     x, y = batch
-    global_flat = get_flat(model) + 1.0
+    # A nudge, not a shove. Starting a whole point away from the trained weights
+    # makes this model diverge, and an update of a few hundred leaves float32
+    # with too few digits for the reconstruction below to mean anything.
+    global_flat = get_flat(model) + 0.01
     delta = run_worker_round(model, global_flat, x, y, None, 0, 1, cfg)
-    assert torch.allclose(get_flat(model), global_flat + delta)
+    # set_flat crosses a device and comes back, so ask for close, not equal.
+    assert torch.allclose(get_flat(model), global_flat + delta, atol=1e-5)
