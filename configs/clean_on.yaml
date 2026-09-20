@@ -1,0 +1,17 @@
+# Ten honest workers with the defense on. Nobody should ever be ejected here.
+name: clean_on
+seed: 42
+dataset: gtsrb
+num_workers: 10
+rounds: 40
+local_epochs: 1
+batch_size: 64
+lr: 0.01
+momentum: 0.9
+target_class: 5
+defense: on                # robust aggregation plus the detector
+aggregator: trimmed_mean
+trim_frac: 0.2
+detector: {warmup: 3, threshold: 3.5, strikes: 3, window: 5, hard_norm_ratio: 5.0}
+execution: inprocess
+round_timeout_s: 60

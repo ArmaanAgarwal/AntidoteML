@@ -13,7 +13,7 @@ Ask the user which person they are (1 ML, 2 Security, 3 Coordinator, 4 Runtime) 
 | 1 ML | `antidote/ml/`, `tests/test_ml_*` |
 | 2 Security | `antidote/attacks/`, `antidote/defense/`, `experiments/notes.md`, `tests/test_attacks_*`, `tests/test_defense_*`, and values inside the `attackers:` and `detector:` blocks of files in `configs/` |
 | 3 Coordinator | `antidote/system/coordinator.py`, `antidote/system/aggregate.py`, `antidote/system/runlog.py`, `antidote/system/run.py`, `tests/test_coordinator_*`, `tests/test_aggregate_*`, `tests/test_runlog_*` |
-| 4 Runtime | `antidote/system/config.py`, `antidote/system/worker.py`, `antidote/system/pool.py`, `antidote/types.py`, `configs/`, `experiments/plot_run.py`, `pyproject.toml`, `.gitignore`, `tests/test_config_*`, `tests/test_worker_*`, `tests/test_pool_*` |
+| 4 Runtime | `antidote/system/config.py`, `antidote/system/worker.py`, `antidote/system/pool.py`, `antidote/types.py`, `configs/`, `experiments/plot_run.py`, `pyproject.toml`, `.gitignore`, `tests/test_config_*`, `tests/test_worker_*`, `tests/test_pool_*`, `tests/test_plot_*` |
 
 - Never edit a file outside the current person's row, even to fix an obvious bug. Stop and write a short note for the owner instead: the file, the problem, the suggested change.
 - `README.md` and `docs/AI_USAGE.md` are append-only. Add to your own section only.
