@@ -16,4 +16,4 @@ detector: {warmup: 3, threshold: 3.5, strikes: 3, window: 5, hard_norm_ratio: 5.
 execution: inprocess
 round_timeout_s: 60
 attackers:
-  6: {mode: scale, start_round: 10, poison_frac: 0.5, scale: 10}
+  6: {mode: scale, start_round: 10, poison_frac: 0.2, scale: 2}
