@@ -110,3 +110,13 @@ def test_part2_compares_the_final_round_to_the_first():
 def test_part2_needs_at_least_two_rounds():
     with pytest.raises(ValueError):
         sanity.check_part2([0.9])
+
+
+def test_sync_is_safe_on_cpu():
+    # Never raises, whatever device string it is handed.
+    assert sanity.sync("cpu") is None
+
+
+def test_sync_accepts_the_device_strings_the_project_uses():
+    for device in ("cpu", "mps", "cuda"):
+        sanity.sync(device)

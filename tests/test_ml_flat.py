@@ -127,3 +127,21 @@ def test_round_trip_works_when_the_model_is_not_on_cpu():
     flat = get_flat(model)
     assert flat.device.type == "cpu"
     assert torch.equal(flat, target)
+
+
+def test_set_flat_accepts_a_float64_vector():
+    # Aggregators can widen a vector. The model must still end up float32.
+    model = make_model(10)
+    target = torch.randn(flat_len(model), dtype=torch.float64)
+    set_flat(model, target)
+    assert all(p.dtype == torch.float32 for p in model.parameters())
+    assert torch.allclose(get_flat(model), target.to(torch.float32))
+
+
+def test_set_flat_accepts_a_non_contiguous_vector():
+    model = make_model(10)
+    padded = torch.randn(flat_len(model) * 2)
+    view = padded[::2]
+    assert not view.is_contiguous()
+    set_flat(model, view)
+    assert torch.equal(get_flat(model), view.contiguous())
