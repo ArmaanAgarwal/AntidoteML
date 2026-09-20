@@ -13,7 +13,8 @@ import argparse
 import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import matplotlib
 
@@ -44,29 +45,43 @@ class Run:
     rounds: list
     summary: dict
     path: str
+    header: dict = field(default_factory=dict)
+
+    def __getitem__(self, key):
+        """Also read like a plain dict, which is how the attacks side reads it."""
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
 
 
 def load_run(path):
     """Read a runs/<name>.jsonl into a Run."""
-    header, rounds, summary = {}, [], {}
+    headers, rounds, summary = [], [], {}
     with open(path) as f:
-        for line in f:
+        for number, line in enumerate(f, start=1):
             line = line.strip()
             if not line:
                 continue
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{number}: not valid JSON") from exc
             kind = record.get("type")
             if kind == "header":
-                header = record
+                headers.append(record)
             elif kind == "round":
                 rounds.append(record)
             elif kind == "summary":
                 summary = record
+    if len(headers) != 1:
+        raise ValueError(f"{path} needs exactly one header record, found {len(headers)}")
     if not rounds:
         raise ValueError(f"{path} has no rounds in it, so there is nothing to plot")
+    header = headers[0]
     name = header.get("name") or os.path.splitext(os.path.basename(path))[0]
     return Run(name=name, config=header.get("config") or {}, rounds=rounds,
-               summary=summary, path=path)
+               summary=summary, path=str(path), header=header)
 
 
 def round_numbers(run):
@@ -296,7 +311,12 @@ def plot_norms(ax, run):
         put_legend(ax, 2)
 
 
-def plot_runs(runs, out_path):
+def as_run(log):
+    """A log given either as a path or as an already loaded Run."""
+    return log if isinstance(log, Run) else load_run(log)
+
+
+def build_figure(runs):
     """Two panels per run, side by side when there are two runs."""
     fig, axes = plt.subplots(
         2, len(runs), figsize=(6.4 * len(runs), 7.2), sharex="col", squeeze=False
@@ -319,9 +339,26 @@ def plot_runs(runs, out_path):
         ha="left",
     )
     fig.tight_layout(rect=(0, 0, 1, 0.97))
-    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-    fig.savefig(out_path, dpi=160, facecolor=SURFACE)
     return fig
+
+
+def plot_runs(logs, out_path=None):
+    """Save the picture and return where it went.
+
+    Takes logs as paths or as loaded Runs, so either side of the project can
+    call it the way that suits them.
+    """
+    logs = list(logs)
+    if not logs or len(logs) > 2:
+        raise ValueError("one or two run logs, not more")
+    runs = [as_run(log) for log in logs]
+    out_path = Path(out_path) if out_path else Path(default_out(runs))
+    fig = build_figure(runs)
+    if str(out_path.parent):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=160, facecolor=SURFACE)
+    plt.close(fig)
+    return out_path
 
 
 def default_out(runs):
@@ -337,10 +374,7 @@ def main(argv=None):
     if len(args.logs) > 2:
         parser.error("one or two logs, not more")
 
-    runs = [load_run(path) for path in args.logs]
-    out_path = args.out or default_out(runs)
-    fig = plot_runs(runs, out_path)
-    plt.close(fig)
+    out_path = str(plot_runs(args.logs, args.out))
     print(f"wrote {out_path}")
     return out_path
 

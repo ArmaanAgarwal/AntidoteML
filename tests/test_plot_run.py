@@ -178,13 +178,13 @@ def test_two_logs_save_one_png_with_a_column_each(tmp_path):
     on = fake_log(tmp_path / "fake_on.jsonl", name="fake_on")
     runs = [plot_run.load_run(off), plot_run.load_run(on)]
     out = tmp_path / "two.png"
-    fig = plot_run.plot_runs(runs, str(out))
+    assert plot_run.plot_runs(runs, str(out)) == out
     assert is_png(out)
-    assert len(fig.axes) == 4  # two panels for each run
+    assert len(plot_run.build_figure(runs).axes) == 4  # two panels for each run
 
 
 def test_the_attacker_line_is_called_out_by_id(tmp_path, log):
-    fig = plot_run.plot_runs([plot_run.load_run(log)], str(tmp_path / "x.png"))
+    fig = plot_run.build_figure([plot_run.load_run(log)])
     labels = [line.get_label() for ax in fig.axes for line in ax.get_lines()]
     assert any("2" in str(label) and "worker" in str(label).lower() for label in labels)
 
@@ -229,13 +229,40 @@ def test_a_log_with_no_scores_says_so_instead_of_showing_an_empty_box(tmp_path):
             w.pop("norm_ratio", None)
     (tmp_path / "bare.jsonl").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
 
-    fig = plot_run.plot_runs([plot_run.load_run(path)], str(tmp_path / "bare.png"))
+    fig = plot_run.build_figure([plot_run.load_run(path)])
     notes = [t.get_text() for ax in fig.axes for t in ax.texts]
     assert any("no update scores" in note for note in notes)
 
 
 def test_the_round_axis_only_shows_whole_numbers(tmp_path):
     path = fake_log(tmp_path / "short.jsonl", name="short", rounds=3)
-    fig = plot_run.plot_runs([plot_run.load_run(path)], str(tmp_path / "short.png"))
+    fig = plot_run.build_figure([plot_run.load_run(path)])
     ticks = fig.axes[-1].get_xticks()
     assert all(float(t).is_integer() for t in ticks)
+
+
+def test_a_run_also_reads_like_a_dict(log):
+    """The attacks side reads a run with square brackets. Keep that working."""
+    run = plot_run.load_run(log)
+    assert run["header"]["name"] == run.name
+    assert run["rounds"] is run.rounds
+    assert run["summary"]["false_positives"] == 0
+    with pytest.raises(KeyError):
+        run["nonsense"]
+
+
+def test_a_log_with_no_header_says_so(tmp_path):
+    path = tmp_path / "headless.jsonl"
+    path.write_text(json.dumps({"type": "round", "round": 1}) + "\n")
+    with pytest.raises(ValueError, match="header"):
+        plot_run.load_run(str(path))
+
+
+def test_plot_runs_takes_paths_as_well_as_loaded_runs(tmp_path, log):
+    out = plot_run.plot_runs([log], tmp_path / "from_path.png")
+    assert is_png(out)
+
+
+def test_plot_runs_refuses_more_than_two_logs(tmp_path, log):
+    with pytest.raises(ValueError, match="one or two"):
+        plot_run.plot_runs([log, log, log], tmp_path / "three.png")
