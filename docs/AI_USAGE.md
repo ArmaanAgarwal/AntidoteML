@@ -8,6 +8,7 @@ another person's section.
 - Claude Code wrote `antidote/ml/model.py` and its tests from step 1 of the plan. I checked the 629,291 parameter count and that the model has no buffers.
 - Claude Code wrote `antidote/ml/flat.py` and its tests from step 2 of the plan, replacing Person 4's stub. I checked the round trip is exact and that a wrong length raises.
 - Claude Code wrote `antidote/ml/train.py` and its tests from step 3 of the plan, replacing Person 4's stub. I checked the same seed reproduces a run exactly and that momentum does not carry between rounds.
+- Claude Code wrote `antidote/ml/data.py` and its tests from step 4 of the plan, replacing Person 4's stub. I checked the 43 class names, the uint8 cache, and that labels stay attached to their images through the split.
 
 ## Person 2: Security
 
